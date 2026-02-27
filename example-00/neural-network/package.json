@@ -2,10 +2,10 @@
   "name": "example-00",
   "version": "0.0.1",
   "description": "",
-  "main": "index.js",
-  "types": "module",
+  "main": "index.ts",
+  "type": "module",
   "scripts": {
-    "start": "node --no-warnings --watch index.js",
+    "start": "tsx --no-warnings --watch index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -18,6 +18,8 @@
     "node": "22.22.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.4"
+    "@biomejs/biome": "^2.4.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
   }
 }
