@@ -1,0 +1,24 @@
+{
+  "name": "ecommerce-recomendations-with-ml",
+  "version": "1.0.0",
+  "description": "An e-commerce recommendation system with TensorFlow.js",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "browser-sync -w . --server --files 'index.html, data/*.json, js/*.js' --port 3000",
+    "lint": "biome check --write",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ecommerce",
+    "tensorflow",
+    "recommendation",
+    "javascript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.4",
+    "browser-sync": "^3.0.4"
+  }
+}
