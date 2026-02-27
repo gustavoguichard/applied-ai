@@ -1,39 +1,39 @@
 import tf from '@tensorflow/tfjs-node'
 
-// Exemplo de pessoas para treino (cada pessoa com idade, cor e localização)
-// const pessoas = [
-//     { nome: "Erick", idade: 30, cor: "azul", localizacao: "São Paulo" },
-//     { nome: "Ana", idade: 25, cor: "vermelho", localizacao: "Rio" },
-//     { nome: "Carlos", idade: 40, cor: "verde", localizacao: "Curitiba" }
+// Example people for training (each person with age, color, and location)
+// const people = [
+//     { name: "Erick", age: 30, color: "blue", location: "São Paulo" },
+//     { name: "Ana", age: 25, color: "red", location: "Rio" },
+//     { name: "Carlos", age: 40, color: "green", location: "Curitiba" }
 // ];
 
-// Vetores de entrada com valores já normalizados e one-hot encoded
-// Ordem: [idade_normalizada, azul, vermelho, verde, São Paulo, Rio, Curitiba]
-// const tensorPessoas = [
+// Input vectors with already normalized and one-hot encoded values
+// Order: [normalized_age, blue, red, green, São Paulo, Rio, Curitiba]
+// const peopleTensor = [
 //     [0.33, 1, 0, 0, 1, 0, 0], // Erick
 //     [0, 0, 1, 0, 0, 1, 0],    // Ana
 //     [1, 0, 0, 1, 0, 0, 1]     // Carlos
 // ]
 
-// Usamos apenas os dados numéricos, como a rede neural só entende números.
-// tensorPessoasNormalizado corresponde ao dataset de entrada do modelo.
-const tensorPessoasNormalizado = [
+// We use only numeric data, as the neural network only understands numbers.
+// normalizedPeopleTensor corresponds to the model's input dataset.
+const normalizedPeopleTensor = [
   [0.33, 1, 0, 0, 1, 0, 0], // Erick
   [0, 0, 1, 0, 0, 1, 0], // Ana
   [1, 0, 0, 1, 0, 0, 1] // Carlos
 ]
 
-// Labels das categorias a serem previstas (one-hot encoded)
+// Labels for categories to be predicted (one-hot encoded)
 // [premium, medium, basic]
-const labelsNomes = ['premium', 'medium', 'basic'] // Ordem dos labels
+const labelNames = ['premium', 'medium', 'basic'] // Label order
 const tensorLabels = [
   [1, 0, 0], // premium - Erick
   [0, 1, 0], // medium - Ana
   [0, 0, 1] // basic - Carlos
 ]
 
-// Criamos tensores de entrada (xs) e saída (ys) para treinar o modelo
-const inputXs = tf.tensor2d(tensorPessoasNormalizado)
+// We create input (xs) and output (ys) tensors to train the model
+const inputXs = tf.tensor2d(normalizedPeopleTensor)
 const outputYs = tf.tensor2d(tensorLabels)
 
 inputXs.print()
@@ -42,7 +42,7 @@ outputYs.print()
 async function trainModel(inputXs, outputYs) {
   const model = tf.sequential()
   // First layer of neural network
-  // input shape is 7 positions (idade normalizada, 3 cores, 3 localizações)
+  // input shape is 7 positions (normalized age, 3 colors, 3 locations)
   // 80 neurons because the training dataset is small
   // The more neurons, the more complex the model is and consequently more proccessing power is needed
   // ReLU is a activation function that is used to introduce non-linearity to the model
@@ -91,10 +91,10 @@ async function trainModel(inputXs, outputYs) {
 // The more data the better the model will be so the algorithm will be able to predict the labels with more accuracy
 const model = await trainModel(inputXs, outputYs)
 
-// const person = { name: 'zé', idade: 28, cor: 'verde', localizacao: 'Curitiba' }
+// const person = { name: 'zé', age: 28, color: 'green', location: 'Curitiba' }
 // normalize the person data
-// ex: idade_min = 25, idade_max = 40, normalized = (28 - 25) / (40 - 25) = 0.2
-const normalizedPersonTenson = [
+// ex: age_min = 25, age_max = 40, normalized = (28 - 25) / (40 - 25) = 0.2
+const normalizedPersonTensor = [
   [
     0.2, // Normalized age
     1, // Blue color
@@ -115,10 +115,10 @@ async function predict(model, person) {
   return predictionArray[0].map((prob, index) => ({ prob, index }))
 }
 
-const predictions = await predict(model, normalizedPersonTenson)
+const predictions = await predict(model, normalizedPersonTensor)
 console.log(
   predictions
     .sort((a, b) => b.prob - a.prob)
-    .map((p) => `${labelsNomes[p.index]} - ${(p.prob * 100).toFixed(2)}%`)
+    .map((p) => `${labelNames[p.index]} - ${(p.prob * 100).toFixed(2)}%`)
     .join('\n')
 )
