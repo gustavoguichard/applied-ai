@@ -79,3 +79,10 @@ body {
 .user-purchases-data {
   transition: max-height 0.3s ease;
 }
+
+.toggle-visor-btn {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+}
