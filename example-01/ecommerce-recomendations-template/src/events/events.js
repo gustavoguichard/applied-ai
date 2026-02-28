@@ -1,6 +1,25 @@
+/**
+ * Event Bus — the central pub/sub system for inter-controller communication.
+ *
+ * This replaces the need for controllers to reference each other directly.
+ * Under the hood it uses native DOM CustomEvents dispatched on `document`,
+ * which means any part of the app can subscribe without coupling.
+ *
+ * Pattern for each event:
+ *   - `on<EventName>(callback)` — subscribe: registers a listener on `document`
+ *   - `dispatch<EventName>(data)` — publish: fires a CustomEvent with `detail: data`
+ *
+ * All methods are static — no instance needed. Import and call directly:
+ *   Events.onUserSelected((user) => { ... })
+ *   Events.dispatchUserSelected(user)
+ *
+ * Data is passed through `event.detail`, which is the standard CustomEvent payload.
+ */
 import { events } from './constants.js'
 
 export default class Events {
+  // --- Training lifecycle ---
+
   static onTrainingComplete(callback) {
     document.addEventListener(events.trainingComplete, (event) => {
       return callback(event.detail)
@@ -12,6 +31,8 @@ export default class Events {
     })
     document.dispatchEvent(event)
   }
+
+  // --- Recommendation flow ---
 
   static onRecommend(callback) {
     document.addEventListener(events.recommend, (event) => {
@@ -37,6 +58,8 @@ export default class Events {
     document.dispatchEvent(event)
   }
 
+  // --- Model training trigger ---
+
   static onTrainModel(callback) {
     document.addEventListener(events.modelTrain, (event) => {
       return callback(event.detail)
@@ -48,6 +71,8 @@ export default class Events {
     })
     document.dispatchEvent(event)
   }
+
+  // --- TensorFlow.js Visualization (tfvis) ---
 
   static onTFVisLogs(callback) {
     document.addEventListener(events.tfvisLogs, (event) => {
@@ -74,6 +99,8 @@ export default class Events {
     document.dispatchEvent(event)
   }
 
+  // --- Training progress (percentage updates) ---
+
   static onProgressUpdate(callback) {
     document.addEventListener(events.modelProgressUpdate, (event) => {
       return callback(event.detail)
@@ -87,6 +114,8 @@ export default class Events {
     document.dispatchEvent(event)
   }
 
+  // --- User selection ---
+
   static onUserSelected(callback) {
     document.addEventListener(events.userSelected, (event) => {
       return callback(event.detail)
@@ -99,6 +128,8 @@ export default class Events {
     document.dispatchEvent(event)
   }
 
+  // --- Users list updated (after add/remove purchase) ---
+
   static onUsersUpdated(callback) {
     document.addEventListener(events.usersUpdated, (event) => {
       return callback(event.detail)
@@ -110,6 +141,8 @@ export default class Events {
     })
     document.dispatchEvent(event)
   }
+
+  // --- Purchase lifecycle ---
 
   static onPurchaseAdded(callback) {
     document.addEventListener(events.purchaseAdded, (event) => {

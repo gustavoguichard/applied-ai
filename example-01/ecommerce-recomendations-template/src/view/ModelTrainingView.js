@@ -1,3 +1,15 @@
+/**
+ * ModelView — manages the "Model Training" card in the UI.
+ *
+ * Responsibilities:
+ * - "Train Model" button → triggers model training via controller callback
+ * - "Run Recommendation" button → triggers recommendation via controller callback
+ * - Collapsible "All Users Purchase Data" section (toggle show/hide)
+ * - Training progress UI (spinner + disabled state during training)
+ *
+ * The "Run Recommendation" button starts disabled and is only enabled
+ * when BOTH conditions are met: a model has been trained AND a user is selected.
+ */
 import { View } from './View.js'
 
 export class ModelView extends View {
@@ -6,6 +18,7 @@ export class ModelView extends View {
   #purchasesDiv = document.querySelector('#purchasesDiv')
   #allUsersPurchasesList = document.querySelector('#allUsersPurchasesList')
   #runRecommendationBtn = document.querySelector('#runRecommendationBtn')
+  // Callbacks registered by ModelController
   #onTrainModel
   #onRunRecommendation
 
@@ -22,6 +35,7 @@ export class ModelView extends View {
   }
 
   attachEventListeners() {
+    // Delegate button clicks to the controller
     this.#trainModelBtn.addEventListener('click', () => {
       this.#onTrainModel()
     })
@@ -29,6 +43,7 @@ export class ModelView extends View {
       this.#onRunRecommendation()
     })
 
+    // Toggle the collapsible "All Users Purchase Data" section
     this.#purchasesDiv.addEventListener('click', () => {
       const purchasesList = this.#allUsersPurchasesList
 
@@ -48,6 +63,9 @@ export class ModelView extends View {
   enableRecommendButton() {
     this.#runRecommendationBtn.disabled = false
   }
+
+  // Updates the train button to show a spinner during training,
+  // and re-enables it when progress reaches 100%.
   updateTrainingProgress(progress) {
     this.#trainModelBtn.disabled = true
     this.#trainModelBtn.innerHTML =
@@ -59,6 +77,8 @@ export class ModelView extends View {
     }
   }
 
+  // Renders a summary of all users and their purchases (badges) in the collapsible section.
+  // This gives visibility into the training data used by the model.
   renderAllUsersPurchases(users) {
     const html = users
       .map((user) => {

@@ -1,3 +1,9 @@
+/**
+ * ProductService — read-only data access for the product catalog.
+ *
+ * Unlike UserService, products are not mutable — they're always
+ * fetched fresh from the static JSON file. This is the product "database".
+ */
 export class ProductService {
   async getProducts() {
     const response = await fetch('./data/products.json')

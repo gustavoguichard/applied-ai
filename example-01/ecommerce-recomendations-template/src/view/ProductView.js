@@ -1,12 +1,25 @@
+/**
+ * ProductView — renders the product catalog cards and handles "Buy Now" button interactions.
+ *
+ * Responsibilities:
+ * - Loads the product-card.html template on construction
+ * - Renders a list of products as Bootstrap cards
+ * - Manages button state (disabled until a user is selected)
+ * - Provides visual feedback on purchase (brief green "Added" flash)
+ *
+ * The view does NOT know about services or events — it delegates business logic
+ * to the controller via the registered callback (Inversion of Control pattern):
+ *   controller calls → view.registerBuyProductCallback(handler)
+ *   user clicks "Buy Now" → view calls handler(product)
+ */
 import { View } from './View.js'
 
 export class ProductView extends View {
-  // DOM elements
   #productList = document.querySelector('#productList')
 
   #buttons
-  // Templates and callbacks
   #productTemplate
+  // Callback provided by the controller — called when user clicks "Buy Now"
   #onBuyProduct
 
   constructor() {
@@ -20,15 +33,19 @@ export class ProductView extends View {
     )
   }
 
+  // Called by the controller when a user is selected/deselected.
+  // Enables buy buttons only when there's a valid user (so purchases can be attributed).
   onUserSelected(user) {
-    // Enable buttons if a user is selected, otherwise disable them
     this.setButtonsState(!user.id)
   }
 
+  // Inversion of Control: the controller registers what should happen on "Buy Now".
   registerBuyProductCallback(callback) {
     this.#onBuyProduct = callback
   }
 
+  // Renders all product cards into #productList.
+  // Each product's full JSON is embedded in data-product for easy retrieval on click.
   render(products, disableButtons = true) {
     if (!this.#productTemplate) return
     const html = products
@@ -47,7 +64,6 @@ export class ProductView extends View {
     this.#productList.innerHTML = html
     this.attachBuyButtonListeners()
 
-    // Disable all buttons by default
     this.setButtonsState(disableButtons)
   }
 
@@ -60,6 +76,8 @@ export class ProductView extends View {
     })
   }
 
+  // Attaches click listeners to all "Buy Now" buttons.
+  // On click: shows a brief green confirmation, then delegates to the controller callback.
   attachBuyButtonListeners() {
     this.#buttons = document.querySelectorAll('.buy-now-btn')
     this.#buttons.forEach((button) => {
