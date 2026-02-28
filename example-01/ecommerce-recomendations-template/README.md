@@ -69,7 +69,7 @@ index.html (entry point)
     │   └── events.js        → Event bus: pub/sub via DOM CustomEvents
     ├── service/
     │   ├── UserService.js   → User CRUD over sessionStorage
-    │   └── ProductService.js → Read-only product catalog (fetches JSON)
+    │   └── ProductService.js → Read-only product catalog (cached after first fetch)
     ├── view/
     │   ├── View.js          → Base class: template loading + {{mustache}} replacement
     │   ├── UserView.js      → User dropdown, age, past purchases list
@@ -91,12 +91,14 @@ index.html (entry point)
 ### Data Layer — `data/` + Services
 
 **Static data** lives in JSON files:
-- `data/users.json` — 5 users, each with `id`, `name`, `age`, and `purchases` (array of product objects)
+- `data/users.json` — 5 users, each with `id`, `name`, `age`, and `purchases` (array of product IDs, e.g. `[1, 2]`)
 - `data/products.json` — 10 products with `id`, `name`, `category`, `price`, `color`
+
+Purchases are **normalized** — users store only product IDs, not full product objects. Controllers resolve IDs to full product objects via `ProductService` when needed for rendering.
 
 **`UserService`** wraps `sessionStorage` as a mutable in-memory DB. On first call to `getDefaultUsers()`, it fetches `users.json` and caches everything in `sessionStorage` under the key `ew-academy-users`. All subsequent reads/writes (get, update, add) go through `sessionStorage`, meaning the data is ephemeral per browser tab.
 
-**`ProductService`** is simpler — always fetches `products.json` (read-only catalog).
+**`ProductService`** is read-only — fetches `products.json` once and caches the result in memory for subsequent lookups.
 
 ### View Layer — `View` base + concrete views
 
@@ -140,9 +142,9 @@ Each controller follows the same pattern:
 
 **`UserController`** — the user lifecycle:
 - Renders user dropdown options (5 from JSON + 1 hardcoded "Josézin da Silva")
-- On user select → fetches user from service → dispatches `user:selected` → renders details + purchases
-- On purchase added (from ProductController) → updates user in sessionStorage → renders new purchase → dispatches `users:updated`
-- On purchase removed (click on past-purchase) → splices from array → updates storage → dispatches `users:updated`
+- On user select → fetches user from service → dispatches `user:selected` → resolves purchase IDs via ProductService → renders details + purchases
+- On purchase added (from ProductController) → pushes product ID to user's purchases → updates sessionStorage → renders new purchase → dispatches `users:updated`
+- On purchase removed (click on past-purchase) → removes ID from array → updates storage → dispatches `users:updated`
 
 **`ProductController`** — the product catalog:
 - Fetches all products → renders cards (disabled buttons)
@@ -154,7 +156,7 @@ Each controller follows the same pattern:
 - On "Train Model" click → gets all users → dispatches `training:train`
 - On `training:complete` → sets `#alreadyTrained = true`, enables "Run Recommendation" button (if user is selected)
 - On "Run Recommendation" click → dispatches `recommend` for current user
-- On `users:updated` → refreshes the "All Users Purchase Data" table
+- On `users:updated` → resolves purchase IDs to products via ProductService → refreshes the "All Users Purchase Data" table
 
 **`WorkerController`** — the bridge to the Web Worker:
 - Listens to `training:train` → `postMessage` to worker with `train:model` action
@@ -194,13 +196,15 @@ On page load, the model auto-trains with the 5 default users. The tfvis visor op
 
 1. **Event-driven decoupling** — controllers never reference each other directly. All cross-controller communication goes through `Events`, making each controller independently testable.
 
-2. **sessionStorage as database** — user mutations (adding/removing purchases) persist only within the tab session. Refreshing reloads defaults from JSON.
+2. **Normalized purchases** — users store only product IDs in their `purchases` array, not full product objects. Controllers resolve IDs to products via `ProductService` at the boundary before passing data to views. This keeps a single source of truth for product data.
 
-3. **Web Worker for ML** — TensorFlow.js model training is off the main thread, keeping the UI responsive. The worker communicates via `postMessage`/`onmessage`.
+3. **sessionStorage as database** — user mutations (adding/removing purchases) persist only within the tab session. Refreshing reloads defaults from JSON.
 
-4. **HTML template files** — views fetch `.html` snippets and do `{{mustache}}` replacement, keeping presentation separate from logic without needing a build step.
+4. **Web Worker for ML** — TensorFlow.js model training is off the main thread, keeping the UI responsive. The worker communicates via `postMessage`/`onmessage`.
 
-5. **No build system** — native ES modules (`type: "module"`), served directly via `browser-sync`. No bundler, no transpilation.
+5. **HTML template files** — views fetch `.html` snippets and do `{{mustache}}` replacement, keeping presentation separate from logic without needing a build step.
+
+6. **No build system** — native ES modules (`type: "module"`), served directly via `browser-sync`. No bundler, no transpilation.
 
 ## Future Enhancements
 

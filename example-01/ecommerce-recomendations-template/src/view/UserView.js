@@ -19,7 +19,9 @@ export class UserView extends View {
   #userAge = document.querySelector('#userAge')
   #pastPurchasesList = document.querySelector('#pastPurchasesList')
 
+  // Template for past purchases
   #purchaseTemplate
+
   // Callbacks registered by the controller (Inversion of Control)
   #onUserSelect
   #onPurchaseRemove
