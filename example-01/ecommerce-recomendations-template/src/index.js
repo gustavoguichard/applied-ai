@@ -52,15 +52,17 @@ const w = WorkerController.init({
   events: Events
 })
 
-// Load the default users from JSON and immediately start training the model.
+// Load the default users and product catalog, then immediately start training.
 // This gives the model a head start so recommendations are ready faster.
 const users = await userService.getDefaultUsers()
-w.triggerTrain(users)
+const products = await productService.getProducts()
+w.triggerTrain(users, products)
 
 // ModelController manages the "Train Model" / "Run Recommendation" buttons
 ModelController.init({
   modelView,
   userService,
+  productService,
   events: Events
 })
 

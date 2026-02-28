@@ -6,7 +6,7 @@
  * This controller translates between the two worlds:
  *
  * Main thread → Worker:
- *   Events.onTrainModel → worker.postMessage({ action: 'train:model', users })
+ *   Events.onTrainModel → worker.postMessage({ action: 'train:model', users, products })
  *   Events.onRecommend  → worker.postMessage({ action: 'recommend', user })
  *
  * Worker → Main thread:
@@ -41,10 +41,10 @@ export class WorkerController {
   }
 
   setupCallbacks() {
-    // Main thread → Worker: forward training requests
-    this.#events.onTrainModel((data) => {
+    // Main thread → Worker: forward training requests (users + product catalog)
+    this.#events.onTrainModel(({ users, products }) => {
       this.#alreadyTrained = false
-      this.triggerTrain(data)
+      this.triggerTrain(users, products)
     })
     this.#events.onTrainingComplete(() => {
       this.#alreadyTrained = true
@@ -91,9 +91,13 @@ export class WorkerController {
     }
   }
 
-  // Sends a training request to the worker thread
-  triggerTrain(users) {
-    this.#worker.postMessage({ action: workerEvents.trainModel, users })
+  // Sends a training request to the worker thread with the product catalog
+  triggerTrain(users, products) {
+    this.#worker.postMessage({
+      action: workerEvents.trainModel,
+      users,
+      products
+    })
   }
 
   // Sends a recommendation request to the worker thread

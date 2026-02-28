@@ -12,11 +12,13 @@
  */
 export class UserController {
   #userService
+  #productService
   #userView
   #events
-  constructor({ userView, userService, events }) {
+  constructor({ userView, userService, productService, events }) {
     this.#userView = userView
     this.#userService = userService
+    this.#productService = productService
     this.#events = events
   }
 
@@ -65,28 +67,25 @@ export class UserController {
     return this.displayUserDetails(user)
   }
 
-  // A product was bought → add it to the user's purchase array,
+  // A product was bought → add its ID to the user's purchase array,
   // persist to sessionStorage, update the UI, and notify other controllers.
   async handlePurchaseAdded({ user, product }) {
     const updatedUser = await this.#userService.getUserById(user.id)
-    updatedUser.purchases.push({
-      ...product
-    })
+    updatedUser.purchases.push(product.id)
 
     await this.#userService.updateUser(updatedUser)
 
-    const lastPurchase = updatedUser.purchases[updatedUser.purchases.length - 1]
-    this.#userView.addPastPurchase(lastPurchase)
+    this.#userView.addPastPurchase(product)
     this.#events.dispatchUsersUpdated({
       users: await this.#userService.getUsers()
     })
   }
 
-  // A past purchase was clicked for removal → splice it from the array,
+  // A past purchase was clicked for removal → remove its ID from the array,
   // persist, and notify other controllers to refresh their displays.
   async handlePurchaseRemove({ userId, product }) {
     const user = await this.#userService.getUserById(userId)
-    const index = user.purchases.findIndex((item) => item.id === product.id)
+    const index = user.purchases.indexOf(product.id)
 
     if (index !== -1) {
       user.purchases.splice(index, 1)
@@ -97,9 +96,11 @@ export class UserController {
     }
   }
 
+  // Resolve purchase IDs to full product objects before passing to the view.
   async displayUserDetails(user) {
     this.#userView.renderUserDetails(user)
-    this.#userView.renderPastPurchases(user.purchases)
+    const products = await this.#productService.getProductsByIds(user.purchases)
+    this.#userView.renderPastPurchases(products)
   }
 
   getSelectedUserId() {

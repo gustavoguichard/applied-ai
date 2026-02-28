@@ -7,7 +7,7 @@
  *   - postMessage(): sends results/progress back to WorkerController
  *
  * Message protocol (matches workerEvents in constants.js):
- *   Inbound:  { action: 'train:model', users: [...] }
+ *   Inbound:  { action: 'train:model', users: [...], products: [...] }
  *   Inbound:  { action: 'recommend', user: {...} }
  *   Outbound: { type: 'progress:update', progress: { progress: 50 } }
  *   Outbound: { type: 'training:log', epoch, loss, accuracy }
@@ -30,9 +30,11 @@ console.log('Model training worker initialized')
 // Shared state between trainModel and recommend — will hold the trained model
 const _globalCtx = {}
 
-// Stub: replace with actual TensorFlow.js model.fit() logic
-async function trainModel({ users }) {
-  console.log('Training model with users:', users)
+// Stub: replace with actual TensorFlow.js model.fit() logic.
+// Receives the product catalog so it can resolve purchase IDs to product features.
+async function trainModel({ users, products }) {
+  _globalCtx.products = products
+  console.log('Training model with users:', users, 'products:', products)
 
   postMessage({ type: workerEvents.progressUpdate, progress: { progress: 50 } })
   postMessage({

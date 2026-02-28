@@ -16,12 +16,14 @@
 export class ModelController {
   #modelView
   #userService
+  #productService
   #events
   #currentUser = null
   #alreadyTrained = false
-  constructor({ modelView, userService, events }) {
+  constructor({ modelView, userService, productService, events }) {
     this.#modelView = modelView
     this.#userService = userService
+    this.#productService = productService
     this.#events = events
 
     this.init()
@@ -67,11 +69,13 @@ export class ModelController {
     })
   }
 
-  // "Train Model" clicked → get all users and dispatch to the worker via event bus
+  // "Train Model" clicked → get all users and the product catalog,
+  // then dispatch both to the worker via event bus.
   async handleTrainModel() {
     const users = await this.#userService.getUsers()
+    const products = await this.#productService.getProducts()
 
-    this.#events.dispatchTrainModel(users)
+    this.#events.dispatchTrainModel({ users, products })
   }
 
   handleTrainingProgressUpdate(progress) {
@@ -85,7 +89,15 @@ export class ModelController {
     this.#events.dispatchRecommend(updatedUser)
   }
 
+  // Resolve purchase IDs to full product objects before passing to the view.
   async refreshUsersPurchaseData({ users }) {
-    this.#modelView.renderAllUsersPurchases(users)
+    const allProducts = await this.#productService.getProducts()
+    const usersWithProducts = users.map((user) => ({
+      ...user,
+      purchases: user.purchases
+        .map((id) => allProducts.find((p) => p.id === id))
+        .filter(Boolean)
+    }))
+    this.#modelView.renderAllUsersPurchases(usersWithProducts)
   }
 }
