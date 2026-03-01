@@ -67,14 +67,14 @@ export class TFVisorView extends View {
     // Accuracy chart — shows how well the model predicts over time
     tfvis.render.linechart(
       {
-        name: 'Precisão do Modelo',
-        tab: 'Treinamento',
+        name: 'Model Accuracy',
+        tab: 'Training',
         style: { display: 'inline-block', width: '49%' }
       },
-      { values: this.#accPoints, series: ['precisão'] },
+      { values: this.#accPoints, series: ['accuracy'] },
       {
-        xLabel: 'Época (Ciclos de Treinamento)',
-        yLabel: 'Precisão (%)',
+        xLabel: 'Epoch (Training Cycles)',
+        yLabel: 'Accuracy (%)',
         height: 300
       }
     )
@@ -82,14 +82,14 @@ export class TFVisorView extends View {
     // Loss chart — shows the training error decreasing over time
     tfvis.render.linechart(
       {
-        name: 'Erro de Treinamento',
-        tab: 'Treinamento',
+        name: 'Training Error',
+        tab: 'Training',
         style: { display: 'inline-block', width: '49%' }
       },
-      { values: this.#lossPoints, series: ['erros'] },
+      { values: this.#lossPoints, series: ['errors'] },
       {
-        xLabel: 'Época (Ciclos de Treinamento)',
-        yLabel: 'Valor do Erro',
+        xLabel: 'Epoch (Training Cycles)',
+        yLabel: 'Error Value',
         height: 300
       }
     )
