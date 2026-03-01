@@ -27,10 +27,17 @@ export class TFVisorView extends View {
   constructor() {
     super()
 
-    tfvis.visor().open()
     this.#toggleVisorBtn.addEventListener('click', () => {
       tfvis.visor().toggle()
     })
+  }
+
+  open() {
+    tfvis.visor().open()
+  }
+
+  close() {
+    tfvis.visor().close()
   }
 
   renderData(data) {

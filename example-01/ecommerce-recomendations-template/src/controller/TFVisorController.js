@@ -24,14 +24,17 @@ export class TFVisorController {
   }
 
   setupCallbacks() {
-    // New training started — clear previous epoch data so charts start fresh
     this.#events.onTrainModel(() => {
       this.#tfVisorView.resetDashboard()
+      this.#tfVisorView.open()
     })
 
-    // New epoch completed — forward the log to the visor for live chart updates
     this.#events.onTFVisLogs((log) => {
       this.#tfVisorView.handleTrainingLog(log)
+    })
+
+    this.#events.onTrainingComplete(() => {
+      setTimeout(() => this.#tfVisorView.close(), 2000)
     })
   }
 }
