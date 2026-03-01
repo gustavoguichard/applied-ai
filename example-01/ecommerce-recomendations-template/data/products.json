@@ -1,72 +1,72 @@
 [
   {
     "id": 1,
-    "name": "Fones de Ouvido Sem Fio",
-    "category": "eletrônicos",
+    "name": "Wireless Headphones",
+    "category": "electronics",
     "price": 129.99,
-    "color": "preto"
+    "color": "black"
   },
   {
     "id": 2,
-    "name": "Relógio Inteligente",
-    "category": "eletrônicos",
+    "name": "Smart Watch",
+    "category": "electronics",
     "price": 199.99,
-    "color": "prata"
+    "color": "silver"
   },
   {
     "id": 3,
-    "name": "Caixa de Som Bluetooth",
-    "category": "eletrônicos",
+    "name": "Bluetooth Speaker",
+    "category": "electronics",
     "price": 89.99,
-    "color": "azul"
+    "color": "blue"
   },
   {
     "id": 4,
-    "name": "Camiseta Estampada",
-    "category": "vestuário",
+    "name": "Printed T-Shirt",
+    "category": "clothing",
     "price": 49.99,
-    "color": "branco"
+    "color": "white"
   },
   {
     "id": 5,
-    "name": "Calça Jeans Slim",
-    "category": "vestuário",
+    "name": "Slim Jeans",
+    "category": "clothing",
     "price": 99.99,
-    "color": "azul"
+    "color": "blue"
   },
   {
     "id": 6,
-    "name": "Tênis Esportivo",
-    "category": "calçados",
+    "name": "Sports Sneakers",
+    "category": "footwear",
     "price": 149.99,
-    "color": "vermelho"
+    "color": "red"
   },
   {
     "id": 7,
-    "name": "Sandália Casual",
-    "category": "calçados",
+    "name": "Casual Sandals",
+    "category": "footwear",
     "price": 69.99,
-    "color": "bege"
+    "color": "beige"
   },
   {
     "id": 8,
-    "name": "Boné Estiloso",
-    "category": "acessórios",
+    "name": "Stylish Cap",
+    "category": "accessories",
     "price": 39.99,
-    "color": "preto"
+    "color": "black"
   },
   {
     "id": 9,
-    "name": "Mochila Executiva",
-    "category": "acessórios",
+    "name": "Executive Backpack",
+    "category": "accessories",
     "price": 159.99,
-    "color": "cinza"
+    "color": "gray"
   },
   {
     "id": 10,
-    "name": "Óculos de Sol",
-    "category": "acessórios",
+    "name": "Sunglasses",
+    "category": "accessories",
     "price": 89.99,
-    "color": "marrom"
+    "color": "brown"
   }
 ]
