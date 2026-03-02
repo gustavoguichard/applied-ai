@@ -1,16 +1,23 @@
-/**
- * ProductService — read-only data access for the product catalog.
- *
- * Fetches products from the REST API backed by PostgreSQL.
- * The catalog is cached after the first fetch since it never changes at runtime.
- */
+import { z } from 'zod'
+import { api } from './api.js'
+
+const productSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  category: z.string(),
+  price: z.coerce.number(),
+  color: z.string(),
+})
+
+const productsSchema = z.array(productSchema)
+
 export class ProductService {
   #products = null
 
   async getProducts() {
     if (!this.#products) {
-      const response = await fetch('/api/products')
-      this.#products = await response.json()
+      const response = await api.get('/products')
+      this.#products = await response.json(productsSchema)
     }
     return this.#products
   }
