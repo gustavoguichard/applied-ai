@@ -93,6 +93,37 @@ function normalize(value, min, max) {
   return (value - min) / (max - min || 1)
 }
 
+// Returns { min, max } for a numeric array — used for normalization bounds on ages and prices
+function bounds(values) {
+  return { min: Math.min(...values), max: Math.max(...values) }
+}
+
+// Maps an array of unique items to { item: index } — used for one-hot encoding of categories and colors
+function buildIndex(items) {
+  return Object.fromEntries(items.map((item, i) => [item, i]))
+}
+
+// Arithmetic mean of a numeric array — used for average age computation and buyer age fallback
+function mean(values) {
+  return values.reduce((sum, v) => sum + v, 0) / values.length
+}
+
+function groupBuyerAgesByProduct(users, products) {
+  const buyerAgesPerProduct = new Map()
+  users.forEach((user) => {
+    user.purchases.forEach((p) => {
+      const purchasedProduct = products.find((product) => product.id === p)
+      if (purchasedProduct) {
+        const agesForProduct =
+          buyerAgesPerProduct.get(purchasedProduct.name) ?? []
+        agesForProduct.push(user.age)
+        buyerAgesPerProduct.set(purchasedProduct.name, agesForProduct)
+      }
+    })
+  })
+  return buyerAgesPerProduct
+}
+
 // --------------------------------------------------------------------------
 // CONTEXT BUILDING — makeContext()
 // --------------------------------------------------------------------------
@@ -110,72 +141,34 @@ function normalize(value, min, max) {
 //   - normalizedProductAvgAge: for each product, the normalized average age
 //     of users who bought it (used as a feature to capture age-demographic affinity)
 function makeContext({ users, products }) {
-  // Extract all user ages to compute normalization bounds
+  // Extract all user ages and product prices to compute normalization bounds
   const ages = users.map((user) => user.age)
-  const minAge = Math.min(...ages)
-  const maxAge = Math.max(...ages)
+  const ageBounds = bounds(ages)
+  const priceBounds = bounds(products.map((product) => product.price))
 
-  // Extract all product prices to compute normalization bounds
-  const prices = products.map((product) => product.price)
-  const minPrice = Math.min(...prices)
-  const maxPrice = Math.max(...prices)
-
-  // Build category → integer index mapping for one-hot encoding.
+  // Build category/color → integer index mappings for one-hot encoding.
   // Example: if products have categories ["Electronics", "Clothing", "Books"],
-  // this produces { "Electronics": 0, "Clothing": 1, "Books": 2 }
-  const categories = new Set(products.map((product) => product.category))
-  const categoriesIndex = Object.fromEntries(
-    Array.from(categories).map((category, index) => [category, index])
-  )
-
-  // Same for colors — each unique color gets an integer index
-  const colors = new Set(products.map((product) => product.color))
-  const colorsIndex = Object.fromEntries(
-    Array.from(colors).map((color, index) => [color, index])
-  )
+  // categoriesIndex produces { "Electronics": 0, "Clothing": 1, "Books": 2 }
+  const uniqueCategories = [
+    ...new Set(products.map((product) => product.category))
+  ]
+  const uniqueColors = [...new Set(products.map((product) => product.color))]
+  const categoriesIndex = buildIndex(uniqueCategories)
+  const colorsIndex = buildIndex(uniqueColors)
 
   // Mean age across all users — used as fallback for products nobody has bought yet
-  const meanAge = ages.reduce((sum, age) => sum + age, 0) / ages.length
+  const meanAge = mean(ages)
 
-  // Mean price (computed but not currently used; available for future features)
-  const meanPrice =
-    prices.reduce((sum, price) => sum + price, 0) / prices.length
-
-  // Compute per-product average buyer age.
-  // For each product, we sum the ages of all users who bought it and count them.
-  // This captures the demographic profile of each product: e.g., "young people
-  // buy this product" vs "older people buy this product".
-  const ageSums = {}
-  const ageCounts = {}
-
-  // Iterate all users and their purchases (which are product IDs).
-  // For each purchased product, accumulate the buyer's age into ageSums
-  // and increment ageCounts.
-  users.forEach((user) => {
-    user.purchases.forEach((p) => {
-      // Resolve the product ID to the full product object
-      const purchasedProduct = products.find((product) => product.id === p)
-      if (purchasedProduct) {
-        // Running sum of buyer ages for this product
-        ageSums[purchasedProduct.name] =
-          (ageSums[purchasedProduct.name] || 0) + user.age
-        // Running count of buyers for this product
-        ageCounts[purchasedProduct.name] =
-          (ageCounts[purchasedProduct.name] || 0) + 1
-      }
-    })
-  })
+  const buyerAgesPerProduct = groupBuyerAgesByProduct(users, products)
 
   // For each product, compute the average buyer age and normalize it to [0, 1].
   // Products with no purchases fall back to the global meanAge.
   // This normalized value becomes one of the product's features (the "age" dimension).
   const normalizedProductAvgAge = Object.fromEntries(
     products.map((product) => {
-      const avgAge =
-        ageCounts[product.name] > 0
-          ? ageSums[product.name] / ageCounts[product.name]
-          : meanAge
-      return [product.name, normalize(avgAge, minAge, maxAge)]
+      const ages = buyerAgesPerProduct.get(product.name)
+      const avgAge = ages ? mean(ages) : meanAge
+      return [product.name, normalize(avgAge, ageBounds.min, ageBounds.max)]
     })
   )
 
@@ -184,15 +177,15 @@ function makeContext({ users, products }) {
     products,
     colorsIndex,
     categoriesIndex,
-    minAge,
-    maxAge,
-    minPrice,
-    maxPrice,
-    numCategories: categories.size,
-    numColors: colors.size,
+    minAge: ageBounds.min,
+    maxAge: ageBounds.max,
+    minPrice: priceBounds.min,
+    maxPrice: priceBounds.max,
+    numCategories: uniqueCategories.length,
+    numColors: uniqueColors.length,
     // Total feature vector length: 1 (price) + 1 (age) + numCategories + numColors
     // Example: 2 scalar features + 5 categories + 4 colors = 11 dimensions
-    dimentions: 2 + categories.size + colors.size,
+    dimentions: 2 + uniqueCategories.length + uniqueColors.length,
     normalizedProductAvgAge
   }
 }
@@ -206,7 +199,7 @@ function makeContext({ users, products }) {
 // Weighted one-hot: [0, 0, 0.4, 0] — the "1" is replaced by the weight.
 // This lets us control how much influence this feature has relative to others
 // without needing a separate normalization layer in the model.
-// tf.oneHot returns int32, so we cast to float32 before multiplying by weight.
+// tf.oneHot returns a tensor of dtype int32. Casting to float32 is necessary so we can correctly apply the weight multiplier (which may be a non-integer) in later operations.
 const oneHotWeighted = (index, length, weight) => {
   return tf.oneHot(index, length).cast('float32').mul(weight)
 }
@@ -223,6 +216,9 @@ const oneHotWeighted = (index, length, weight) => {
 // learn the relative importance from scratch — we inject domain knowledge.
 function encodeProduct(product, context) {
   // Normalized price in [0, 1], scaled by price weight (0.2)
+  // Why do we use tensor1d?
+  // tf.tensor1d creates a 1-dimensional tensor (vector) from a flat array, which is the required input type for later tensor operations like tf.concat1d.
+  // Using tensor1d ensures this feature segment can be concatenated with others (e.g., category and color one-hot vectors) in encodeProduct().
   const price = tf.tensor1d([
     normalize(product.price, context.minPrice, context.maxPrice) * WEIGHTS.price
   ])
@@ -244,106 +240,154 @@ function encodeProduct(product, context) {
     WEIGHTS.color
   )
   // Concatenate all feature segments into a single 1D vector
+  // this is equivalent to [price, age, ...category, ...color] but as a tensor.
+  // It creates a 1D tensor with the same layout and order as that array.
   return tf.concat1d([price, age, category, color])
 }
 
-// Encodes a user into a feature vector of the same shape as a product vector.
-// This is critical: user and product vectors must live in the same feature space
-// so we can concatenate them as input to the neural network.
-//
-// Strategy:
-//   - Users WITH purchases: encode each purchased product, then take the
-//     element-wise mean. This creates a "centroid" — an average taste profile.
-//     A user who bought an Electronics item and a Clothing item will have
-//     ~0.2 in both category slots, capturing their mixed preferences.
-//   - Users WITHOUT purchases (cold start): we can't derive taste from history,
-//     so we create a sparse vector with only the age feature filled in.
-//     Price = 0 (no signal), category/color = all zeros (no preference).
-//     The model can still make age-based predictions (e.g., "young users tend to buy X").
-function encodeUser(user, context) {
-  if (user.purchases.length) {
-    // For each purchase ID, find the product and encode it.
-    // tf.stack() turns N vectors into a 2D tensor (N rows × dimentions cols).
-    // .mean(0) collapses along axis 0, producing the element-wise average
-    // across all purchased product vectors — the user's "taste centroid".
-    // .reshape([1, dimentions]) adds a batch dimension for model compatibility.
-    return tf
+function encodeUserFromPurchases(user, context) {
+  // Imagine a 1D tensor (vector) like this:
+  //   [a, b, c]
+  // If we "stack" three such vectors, we get a 2D tensor (matrix):
+  //   [[a, b, c],
+  //    [a, b, c],
+  //    [a, b, c]]
+  // In tf.stack(arr), each element of arr is a 1D tensor,
+  // and the result is a 2D tensor where each row is one of those 1D tensors.
+  return (
+    tf
       .stack(
+        // For each purchased product ID in user.purchases...
         user.purchases.map((purchase) => {
+          // Find the full product object in the products array using the ID
           const product = context.products.find((p) => p.id === purchase)
+          // If the product exists, encode it to a feature vector tensor
           if (product) {
             return encodeProduct(product, context)
           }
-          // If a purchase ID doesn't match any product (stale data), use a zero vector
+          // If the product ID isn't valid, return a zero vector of the correct dimension
+          // tf.zeros([n]) creates a 1D tensor of shape [n] filled with zeros.
+          // Here, we use it to produce a "blank" feature vector (all 0s)
+          // if the product ID is invalid/missing, so it doesn't pollute the user's profile.
           return tf.zeros([context.dimentions])
         })
       )
+      // Compute the mean vector along axis 0 (average each feature column across purchases)
       .mean(0)
+      // Reshape the mean 1D tensor into a 2D tensor with shape [1, dimentions]
       .reshape([1, context.dimentions])
-  } else {
-    // Cold-start fallback: no purchases to derive preferences from.
-    // Build a vector with: [0 (no price info), normalized_age * weight, 0...0 (no category/color)]
-    // This gives the model at least the user's age demographic to work with.
-    return tf
+  )
+}
+
+/**
+ * Encodes a "cold start" user into a feature vector tensor for the model.
+ * Cold start users have no purchase history, so we cannot compute their
+ * average taste profile from purchases. Instead, we create a vector using only their age.
+ *
+ * The resulting vector is shaped as:
+ *   [0 (price placeholder), normalized_age * age_weight, ...zero_category, ...zero_color]
+ * This gives age *some* signal, but categories and colors are all zeroed out.
+ *
+ * Returns:
+ *   Tensor of shape [1, dimentions]
+ */
+function encodeColdStartUser(user, context) {
+  // Create a tensor made up of:
+  // - tf.zeros([1]): placeholder for price feature (no price info for users)
+  // - normalized age ([0,1]), scaled by age weight
+  // - zeros for categories (one-hot, all off)
+  // - zeros for colors (one-hot, all off)
+  return (
+    tf
       .concat1d([
-        tf.zeros([1]), // price slot: zero (no purchase price signal)
+        tf.zeros([1]), // price: no value for user profile
         tf
-          .tensor1d([normalize(user.age, context.minAge, context.maxAge)])
-          .mul(WEIGHTS.age), // age slot: normalized and weighted
-        tf.zeros([context.numCategories]), // category slots: all zero (no preference)
-        tf.zeros([context.numColors]) // color slots: all zero (no preference)
+          .tensor1d([normalize(user.age, context.minAge, context.maxAge)]) // age, normalized [0-1]
+          .mul(WEIGHTS.age), // apply feature weight as with product encoding
+        tf.zeros([context.numCategories]), // all categories "off"
+        tf.zeros([context.numColors]) // all colors "off"
       ])
+      // At this point, we have a 1D tensor of shape [dimentions].
+      // We reshape it to a 2D tensor with shape [1, dimentions], i.e., an array containing one array of features:
+      // from [dimentions] to [[dimentions]].
       .reshape([1, context.dimentions])
-  }
+  )
+}
+
+/**
+ * Encodes a user (with or without purchase history) into a [1, dimentions] tensor.
+ * If the user has made purchases, computes their taste profile based on the purchased products.
+ * If not, falls back to the cold start encoding (just age).
+ */
+function encodeUser(user, context) {
+  // Use the full encoder if the user has made purchases;
+  // otherwise, fall back to cold start logic
+  return user.purchases.length > 0
+    ? encodeUserFromPurchases(user, context)
+    : encodeColdStartUser(user, context)
 }
 
 // --------------------------------------------------------------------------
 // TRAINING DATA GENERATION — createTrainingData()
 // --------------------------------------------------------------------------
 
-// Builds the training dataset for supervised learning.
-//
-// For each user who has at least one purchase, we create a training example
-// for EVERY product in the catalog:
-//   - Input: [userVector, productVector] concatenated (length = dimentions * 2)
-//   - Label: 1 if the user bought this product, 0 if not
-//
-// This means for N users (with purchases) and M products, we get N × M examples.
-// Most labels will be 0 (users buy few of all available products), making this
-// an imbalanced binary classification problem — the model learns to distinguish
-// "likely to buy" from the sea of "unlikely to buy".
-//
-// .dataSync() converts TF tensors to plain JS Float32Arrays so we can
-// accumulate them into regular arrays before creating the final 2D tensors.
-function createTrainingData(context) {
-  const inputs = []
-  const outputs = []
-  context.users
-    // Only users with purchase history can provide meaningful training signal.
-    // Users with no purchases have zero-ish vectors and no positive labels,
-    // which would add noise without teaching the model anything useful.
-    .filter((user) => user.purchases.length)
-    .forEach((user) => {
-      // Encode the user once, reuse for all product pairings.
-      // .dataSync() extracts raw floats from the tensor into a typed array.
-      const userVector = encodeUser(user, context).dataSync()
-      context.products.forEach((product) => {
-        // Encode each product
-        const productVector = encodeProduct(product, context).dataSync()
-        // Binary label: did this user purchase this specific product?
-        const label = user.purchases.includes(product.id) ? 1 : 0
-        // Concatenate user + product vectors into a single input row
-        inputs.push([...userVector, ...productVector])
-        outputs.push(label)
-      })
-    })
+function createUserProductPairs(user, context) {
+  // Encode the user into a flat vector (typed array) of shape [dimentions]
+  const userVector = encodeUser(user, context).dataSync()
 
+  // For each product
+  return context.products.map((product) => {
+    // Encode the product into a flat vector (typed array) of shape [dimentions]
+    const productVector = encodeProduct(product, context).dataSync()
+    // Determine label: 1 if user purchased this product, else 0 (binary classification)
+    const label = user.purchases.includes(product.id) ? 1 : 0
+    // Create the input feature (concatenate user and product vectors), pair with label
+    return { input: [...userVector, ...productVector], label }
+  })
+}
+
+/**
+ * Generates the training dataset for the neural network.
+ *
+ * This function constructs labeled examples for supervised learning. Each example pairs a user with a product,
+ * encoding both into numerical feature vectors and concatenating them.
+ *
+ * For every user who has made at least one purchase, we generate input-label pairs for all products:
+ *   - The input is a concatenation of the user's feature vector and the product's feature vector.
+ *   - The label is 1 if the user actually purchased the product ("positive" example), or 0 if not ("negative" example).
+ *
+ * The labels are essential: during training, the model learns to predict this label — essentially, to estimate the probability
+ * that a given user would buy a given product. Without labels, the model could not learn the concept of "purchased" vs. "not purchased",
+ * and no recommendation signal would emerge.
+ *
+ * The resulting structure:
+ *   - xs: A 2D tensor of shape [number_of_pairs, 2 * feature_dimensions], holding the inputs.
+ *     (Here, number_of_pairs equals the total number of (user, product) combinations for all users with at least one purchase.
+ *      In other words, for each such user, we generate a pair for every product in the catalog:
+ *      number_of_pairs = sum over all users with purchases of (number of products).)
+ *   - ys: A 2D tensor of shape [number_of_pairs, 1], holding the binary labels for each input pair.
+ *   - inputDimensions: The size of each input vector (user + product features).
+ */
+function createTrainingData(context) {
+  // Consider only users with at least one purchase (we can't learn from users with no history)
+  const pairs = context.users
+    .filter((user) => user.purchases.length > 0) // Filter out cold-start users
+    .flatMap((user) => createUserProductPairs(user, context)) // Create (user, product) pairs
+
+  // Gather input features and ground truth labels
+  const inputs = pairs.map((p) => p.input) // shape: [#pairs, 2 * feature_dimensions]
+  const outputs = pairs.map((p) => p.label) // shape: [#pairs]
+
+  // Return tensors and metadata for model training
   return {
-    // xs: 2D input tensor of shape [N*M, dimentions*2]
     xs: tf.tensor2d(inputs),
-    // ys: 2D label tensor of shape [N*M, 1] — must be 2D for binaryCrossentropy
+    // The second parameter ([outputs.length, 1]) explicitly sets the tensor shape.
+    // This ensures that 'ys' is a column vector (shape [N, 1]), rather than a flat [N] vector,
+    // which is required when fitting a model with a single output neuron.
     ys: tf.tensor2d(outputs, [outputs.length, 1]),
-    // inputDimensions: total width of each input row (user features + product features)
+    // inputDimensions is the length of each input vector to the model,
+    // which is the concatenation of a user feature vector and a product feature vector.
+    // Each is of length `context.dimentions`, so their concatenation is `context.dimentions * 2`.
     inputDimensions: context.dimentions * 2
   }
 }
@@ -352,45 +396,45 @@ function createTrainingData(context) {
 // NEURAL NETWORK — configureNeuralNetAndTrain()
 // --------------------------------------------------------------------------
 
-// Builds, compiles, and trains a feedforward neural network for binary classification.
-//
-// Architecture: 4 Dense layers forming a "funnel" that progressively compresses
-// the concatenated [user, product] feature vector down to a single purchase probability.
-//
-//   Input (dimentions * 2) → Dense(128, relu) → Dense(64, relu) → Dense(32, relu) → Dense(1, sigmoid)
-//
-// Why this architecture:
-//   - 128→64→32 funnel: forces the network to learn increasingly abstract
-//     representations. Early layers capture low-level feature interactions,
-//     deeper layers learn high-level patterns like "users in this age group
-//     prefer this type of product at this price range".
-//   - ReLU activation: standard for hidden layers — fast to compute, avoids
-//     vanishing gradient problem, introduces non-linearity.
-//   - Sigmoid output: squashes the final value to [0, 1], interpretable as
-//     the predicted probability that this user would buy this product.
-//   - Binary cross-entropy loss: the standard loss function for binary
-//     classification — measures how far the predicted probability is from
-//     the actual 0/1 label.
-//   - Adam optimizer (lr=0.01): adaptive learning rate optimizer that
-//     converges faster than vanilla SGD. 0.01 is a moderately aggressive
-//     learning rate suitable for small datasets.
-//
-// Returns the trained tf.Sequential model (NOT the fit() History object).
-async function configureNeuralNetAndTrain(trainingData) {
-  // tf.sequential() creates a linear stack of layers (no branching/merging)
+/**
+ * Builds and compiles a neural network model for user-product recommendation.
+ *
+ * This model is designed for binary classification: given feature vectors describing a user and a product,
+ * it predicts the probability that the user would purchase the product.
+ *
+ * Architecture (using TensorFlow.js):
+ *   - tf.sequential(): A simple neural network where each layer feeds only into the next.
+ *   - Layer 1: Dense (fully connected), 128 neurons, ReLU activation. Receives the input vector shape.
+ *   - Layer 2: Dense, 64 neurons, ReLU activation.
+ *   - Layer 3: Dense, 32 neurons, ReLU activation.
+ *   - Output Layer: Dense, 1 neuron, Sigmoid activation (outputs value between 0 and 1 = probability of purchase).
+ *
+ * Notes on API:
+ *   - tf.layers.dense({
+ *       units: NUMBER,            // how many "neurons" in this layer (size of output vector)
+ *       inputShape: [N],          // only for first layer: shape of input vectors to the model (how many features)
+ *       activation: 'relu'        // activation function; 'relu' introduces nonlinearity
+ *     })
+ *   - 'sigmoid' activation in the final layer is required for binary outcome (purchase or not).
+ *   - .compile() prepares the model for training:
+ *       - optimizer: how gradient descent is performed (adam is a common, adaptive choice)
+ *       - loss: what error function to minimize (binaryCrossentropy for binary classification)
+ *       - metrics: log 'accuracy' during training (fraction of correct predictions)
+ */
+function buildModel(inputDimensions) {
+  // Create a simple sequential neural network model (a stack of layers, each feeding into the next)
   const model = tf.sequential()
 
-  // Layer 1: input layer. inputShape must match the training data width.
-  // 128 neurons give the network enough capacity to learn feature interactions.
+  // First hidden layer: takes input of shape [inputDimensions], outputs 128 features, uses ReLU activation
   model.add(
     tf.layers.dense({
-      units: 128,
-      inputShape: [trainingData.inputDimensions],
-      activation: 'relu'
+      units: 128, // number of "neurons" (outputs) in this layer
+      inputShape: [inputDimensions], // the length of each input vector
+      activation: 'relu' // ReLU = max(0, x), helps model learn nonlinear relationships
     })
   )
 
-  // Layer 2: compresses 128 → 64, forcing the network to distill patterns
+  // Second hidden layer: 64 "neurons", ReLU activation
   model.add(
     tf.layers.dense({
       units: 64,
@@ -398,7 +442,7 @@ async function configureNeuralNetAndTrain(trainingData) {
     })
   )
 
-  // Layer 3: compresses 64 → 32, further abstracting the representation
+  // Third hidden layer: 32 "neurons", ReLU activation
   model.add(
     tf.layers.dense({
       units: 32,
@@ -406,48 +450,65 @@ async function configureNeuralNetAndTrain(trainingData) {
     })
   )
 
-  // Layer 4: output layer — single neuron with sigmoid activation.
-  // Outputs a value in [0, 1] representing P(user buys product).
+  // Output layer: 1 neuron (for binary prediction), Sigmoid squashes output to range [0, 1]
   model.add(
     tf.layers.dense({
       units: 1,
-      activation: 'sigmoid'
+      activation: 'sigmoid' // outputs probability of purchase between 0 and 1
     })
   )
 
-  // Compile: configure the optimizer, loss function, and metrics before training.
-  // Must be called before model.fit().
+  // Compile the model:
+  // - optimizer controls how weights are updated (adam is a good adaptive default)
+  // - loss is binary crossentropy, suitable for binary classification
+  // - metrics: log accuracy during training
   model.compile({
-    optimizer: tf.train.adam(0.01),
+    optimizer: tf.train.adam(0.01), // 0.01 = learning rate; smaller = slower but safer learning
     loss: 'binaryCrossentropy',
     metrics: ['accuracy']
   })
 
-  // Train the model on the full dataset.
-  // - epochs: 100 full passes over the training data
-  // - batchSize: 32 examples per gradient update (standard default)
-  // - shuffle: true randomizes example order each epoch to prevent the model
-  //   from learning the order of the data instead of the patterns
-  // - onEpochEnd: posts loss and accuracy to the main thread after each epoch
-  //   so the TFVisorView can render live training charts
-  //   NOTE: TF.js v4.x uses `logs.acc` (not `logs.accuracy`) for the accuracy metric
+  return model
+}
+
+// Trains a neural network model using the provided training data.
+// - trainingData: { xs, ys, inputDimensions }
+//   - xs: input feature tensors (user-product pairs as vectors)
+//   - ys: labels (1 if user purchased product, 0 otherwise)
+//   - inputDimensions: the width of the input layer (xs shape[1])
+// This function builds the model, fits it on the training data, and
+// posts epoch-level logs (loss & accuracy) back to the main thread.
+// Returns: the trained model instance.
+async function configureNeuralNetAndTrain(trainingData) {
+  // Build a new model using the specified input dimensions
+  const model = buildModel(trainingData.inputDimensions)
+
+  // Train the model using the provided xs (inputs) and ys (labels)
+  // - epochs: number of times to iterate over the entire dataset
+  // - batchSize: number of samples per parameter update
+  // - shuffle: randomize data order each epoch (helps generalization)
+  // - callbacks: hook for posting progress to main/UI thread after each epoch
   await model.fit(trainingData.xs, trainingData.ys, {
     epochs: 100,
     batchSize: 32,
     shuffle: true,
     callbacks: {
+      // onEpochEnd runs after each training epoch completes
       onEpochEnd: (epoch, logs) => {
+        // logs.loss = binary cross-entropy loss (how wrong the model is)
+        // logs.acc  = accuracy metric (fraction correct)
+        // Post progress to the main thread (so UI can update graphs etc.)
         postMessage({
           type: workerEvents.trainingLog,
           epoch: epoch,
           loss: logs.loss,
-          accuracy: logs.acc
+          accuracy: logs.acc // logs.acc is the default accuracy metric name for binary
         })
       }
     }
   })
-  // Return the trained model itself — NOT the History object from model.fit().
-  // The model is stored in _model for later use by recommend().
+
+  // Return the trained model for use in inference (recommendations)
   return model
 }
 
@@ -455,51 +516,41 @@ async function configureNeuralNetAndTrain(trainingData) {
 // PIPELINE ORCHESTRATOR — trainModel()
 // --------------------------------------------------------------------------
 
-// Main training entry point — called when the worker receives a 'train:model' message.
-// Orchestrates the full pipeline: context → encode → train → store.
-//
-// Receives { users, products } from WorkerController. Users have normalized
-// purchases (arrays of product IDs like [1, 3, 7], not full product objects).
-async function trainModel({ users, products }) {
-  // Temporarily store products so they're accessible if recommend() is called
-  // before training finishes (defensive — shouldn't happen in normal flow)
-  _globalCtx.products = products
-  console.log('Training model with users:', users)
-
-  // Signal 50% progress to the UI (context building + encoding phase starting)
-  postMessage({ type: workerEvents.progressUpdate, progress: { progress: 50 } })
-
-  // Step 1: Build the context — normalization bounds, lookup indices, per-product stats
-  const context = makeContext({ users, products })
-
-  // Step 2: Pre-encode all product vectors and store them in the context.
-  // These are reused during inference (recommend) to avoid re-encoding every product
-  // each time a recommendation is requested. Each entry stores:
-  //   - name: for display/debugging
-  //   - meta: full product object (passed back to the UI in recommendations)
-  //   - vector: Float32Array of the encoded features (from .dataSync())
-  context.productVectors = products.map((product) => ({
+function preEncodeProducts(products, context) {
+  return products.map((product) => ({
     name: product.name,
     meta: { ...product },
     vector: encodeProduct(product, context).dataSync()
   }))
+}
 
-  // Replace _globalCtx with the fully built context (includes productVectors)
+async function trainModel({ users, products }) {
+  console.log('Training model with users:', users)
+
+  // Notify the main thread that training initialization is halfway done
+  postMessage({ type: workerEvents.progressUpdate, progress: { progress: 50 } })
+
+  // Build ML context — includes feature encodings, lookup indices, normalization bounds, etc.
+  const context = makeContext({ users, products })
+
+  // Pre-encode all products up front for efficiency during both training & inference
+  context.productVectors = preEncodeProducts(products, context)
+
+  // Save the context globally for later inference/recommendation
   _globalCtx = context
 
-  // Step 3: Generate training data — all (user, product) pairs with binary labels
+  // Assemble the full training dataset (xs: features, ys: labels) according to the constructed context
   const trainingData = createTrainingData(context)
 
-  // Step 4: Build and train the neural network. Must happen AFTER createTrainingData
-  // because the model's inputShape depends on trainingData.inputDimensions.
-  // Stores the trained model in the module-level _model variable for inference.
+  // Train a fresh neural network using the training data and await until complete
   _model = await configureNeuralNetAndTrain(trainingData)
 
-  // Signal 100% progress and training completion to the UI
+  // Notify UI/main thread that training reached 100% completion
   postMessage({
     type: workerEvents.progressUpdate,
     progress: { progress: 100 }
   })
+  // Signal end of training; main thread may now use the model for inference
   postMessage({ type: workerEvents.trainingComplete })
 }
 
