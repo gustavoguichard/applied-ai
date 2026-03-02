@@ -67,35 +67,28 @@ export class UserController {
     return this.displayUserDetails(user)
   }
 
-  // A product was bought → add its ID to the user's purchase array,
-  // persist to sessionStorage, update the UI, and notify other controllers.
+  // A product was bought → insert a row into the purchases table,
+  // update the UI, and notify other controllers.
   async handlePurchaseAdded({ user, product }) {
-    const updatedUser = await this.#userService.getUserById(user.id)
-    updatedUser.purchases.push(product.id)
-
-    await this.#userService.updateUser(updatedUser)
+    await this.#userService.addPurchase(user.id, product.id)
 
     this.#userView.addPastPurchase(product)
     this.#events.dispatchUsersUpdated({
       users: await this.#userService.getUsers()
     })
+    const updatedUser = await this.#userService.getUserById(user.id)
     this.#events.dispatchRecommend(updatedUser)
   }
 
-  // A past purchase was clicked for removal → remove its ID from the array,
-  // persist, and notify other controllers to refresh their displays.
+  // A past purchase was clicked for removal → delete the row from the purchases table
+  // and notify other controllers to refresh their displays.
   async handlePurchaseRemove({ userId, product }) {
-    const user = await this.#userService.getUserById(userId)
-    const index = user.purchases.indexOf(product.id)
+    await this.#userService.removePurchase(userId, product.id)
 
-    if (index !== -1) {
-      user.purchases.splice(index, 1)
-      await this.#userService.updateUser(user)
-
-      const updatedUsers = await this.#userService.getUsers()
-      this.#events.dispatchUsersUpdated({ users: updatedUsers })
-      this.#events.dispatchRecommend(user)
-    }
+    const updatedUser = await this.#userService.getUserById(userId)
+    const updatedUsers = await this.#userService.getUsers()
+    this.#events.dispatchUsersUpdated({ users: updatedUsers })
+    this.#events.dispatchRecommend(updatedUser)
   }
 
   // Resolve purchase IDs to full product objects before passing to the view.
