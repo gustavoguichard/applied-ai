@@ -8,6 +8,7 @@
 export class TFVisorController {
   #tfVisorView
   #events
+  #closeTimeout = null
   constructor({ tfVisorView, events }) {
     this.#tfVisorView = tfVisorView
     this.#events = events
@@ -25,6 +26,9 @@ export class TFVisorController {
 
   setupCallbacks() {
     this.#events.onTrainModel(() => {
+      // Cancel any pending auto-close from a previous training or page-load restore,
+      // so re-training always gets a fresh visor that stays open for the full run.
+      clearTimeout(this.#closeTimeout)
       this.#tfVisorView.resetDashboard()
       this.#tfVisorView.open()
     })
@@ -34,7 +38,7 @@ export class TFVisorController {
     })
 
     this.#events.onTrainingComplete(() => {
-      setTimeout(() => this.#tfVisorView.close(), 2000)
+      this.#closeTimeout = setTimeout(() => this.#tfVisorView.close(), 2000)
     })
   }
 }
