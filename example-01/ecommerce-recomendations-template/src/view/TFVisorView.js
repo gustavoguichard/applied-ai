@@ -17,10 +17,6 @@ import { View } from './View.js'
 
 export class TFVisorView extends View {
   // State accumulated across training epochs for charting
-  #weights = null
-  #catalog = []
-  #users = []
-  #logs = []
   #lossPoints = [] // Array of {x: epoch, y: lossValue} for the loss chart
   #accPoints = [] // Array of {x: epoch, y: accuracyValue} for the accuracy chart
   #toggleVisorBtn = document.querySelector('#toggleVisorBtn')
@@ -40,20 +36,27 @@ export class TFVisorView extends View {
     tfvis.visor().close()
   }
 
-  renderData(data) {
-    this.#weights = data.weights
-    this.#catalog = data.catalog
-    this.#users = data.users
-  }
-
   // Called when a new training cycle starts — clears all previous chart data
   resetDashboard() {
-    this.#weights = null
-    this.#catalog = []
-    this.#users = []
-    this.#logs = []
     this.#lossPoints = []
     this.#accPoints = []
+  }
+
+  // Renders a single line chart in the Training tab of the visor panel
+  #renderChart(name, seriesLabel, yLabel, points) {
+    tfvis.render.linechart(
+      {
+        name,
+        tab: 'Training',
+        style: { display: 'inline-block', width: '49%' }
+      },
+      { values: points, series: [seriesLabel] },
+      {
+        xLabel: 'Epoch (Training Cycles)',
+        yLabel,
+        height: 300
+      }
+    )
   }
 
   // Called once per training epoch with { epoch, loss, accuracy }.
@@ -62,36 +65,11 @@ export class TFVisorView extends View {
     const { epoch, loss, accuracy } = log
     this.#lossPoints.push({ x: epoch, y: loss })
     this.#accPoints.push({ x: epoch, y: accuracy })
-    this.#logs.push(log)
 
     // Accuracy chart — shows how well the model predicts over time
-    tfvis.render.linechart(
-      {
-        name: 'Model Accuracy',
-        tab: 'Training',
-        style: { display: 'inline-block', width: '49%' }
-      },
-      { values: this.#accPoints, series: ['accuracy'] },
-      {
-        xLabel: 'Epoch (Training Cycles)',
-        yLabel: 'Accuracy (%)',
-        height: 300
-      }
-    )
+    this.#renderChart('Model Accuracy', 'accuracy', 'Accuracy (%)', this.#accPoints)
 
     // Loss chart — shows the training error decreasing over time
-    tfvis.render.linechart(
-      {
-        name: 'Training Error',
-        tab: 'Training',
-        style: { display: 'inline-block', width: '49%' }
-      },
-      { values: this.#lossPoints, series: ['errors'] },
-      {
-        xLabel: 'Epoch (Training Cycles)',
-        yLabel: 'Error Value',
-        height: 300
-      }
-    )
+    this.#renderChart('Training Error', 'errors', 'Error Value', this.#lossPoints)
   }
 }
