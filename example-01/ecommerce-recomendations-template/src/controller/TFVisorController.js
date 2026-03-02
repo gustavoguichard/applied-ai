@@ -2,8 +2,9 @@
  * TFVisorController — connects the event bus to the TFVisorView (training charts).
  *
  * Simple passthrough controller:
- * - On `training:train` → resets the dashboard (clears old chart data)
- * - On `tfvis:logs` → feeds each training epoch's data to the visor for charting
+ * - On `training:train`    → resets the dashboard (clears old chart data)
+ * - On `training:log`      → feeds each training epoch's data to the visor for charting
+ * - On `training:complete` → schedules the visor to close after 2 seconds
  */
 export class TFVisorController {
   #tfVisorView

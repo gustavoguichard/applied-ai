@@ -8,6 +8,7 @@
  *
  * Message protocol (matches workerEvents in constants.js):
  *   Inbound:  { action: 'train:model', users: [...], products: [...] }
+ *   Inbound:  { action: 'load:saved:model' }
  *   Inbound:  { action: 'recommend', user: {...} }
  *   Outbound: { type: 'progress:update', progress: { status: 'training' | 'trained' } }
  *   Outbound: { type: 'training:log', epoch, loss, accuracy }

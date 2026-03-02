@@ -35,7 +35,5 @@ export const workerEvents = {
   loadSavedModel: 'load:saved:model',
   recommend: 'recommend',
   trainingLog: 'training:log',
-  progressUpdate: 'progress:update',
-  tfVisData: 'tfvis:data',
-  tfVisLogs: 'tfvis:logs'
+  progressUpdate: 'progress:update'
 }

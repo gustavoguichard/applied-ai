@@ -6,13 +6,13 @@
  * This controller translates between the two worlds:
  *
  * Main thread → Worker:
- *   Events.onTrainModel → worker.postMessage({ action: 'train:model', users, products })
- *   Events.onRecommend  → worker.postMessage({ action: 'recommend', user })
+ *   Events.onTrainModel        → worker.postMessage({ action: 'train:model', users, products })
+ *   tryLoadSavedModel()        → worker.postMessage({ action: 'load:saved:model' })
+ *   Events.onRecommend         → worker.postMessage({ action: 'recommend', user })
  *
  * Worker → Main thread:
  *   worker posts 'progress:update'    → Events.dispatchProgressUpdate()
  *   worker posts 'training:complete'  → Events.dispatchTrainingComplete()
- *   worker posts 'tfvis:data'         → Events.dispatchTFVisorData()
  *   worker posts 'training:log'       → Events.dispatchTFVisLogs()
  *   worker posts 'recommend'          → Events.dispatchRecommendationsReady()
  *
@@ -28,11 +28,10 @@ export class WorkerController {
   constructor({ worker, events }) {
     this.#worker = worker
     this.#events = events
-    this.#alreadyTrained = false
     this.init()
   }
 
-  async init() {
+  init() {
     this.setupCallbacks()
   }
 
@@ -62,8 +61,6 @@ export class WorkerController {
     const eventsToIgnoreLogs = [
       workerEvents.progressUpdate,
       workerEvents.trainingLog,
-      workerEvents.tfVisData,
-      workerEvents.tfVisLogs,
       workerEvents.trainingComplete
     ]
     this.#worker.onmessage = (event) => {
@@ -75,10 +72,6 @@ export class WorkerController {
 
       if (event.data.type === workerEvents.trainingComplete) {
         this.#events.dispatchTrainingComplete(event.data)
-      }
-
-      if (event.data.type === workerEvents.tfVisData) {
-        this.#events.dispatchTFVisorData(event.data.data)
       }
 
       if (event.data.type === workerEvents.trainingLog) {
