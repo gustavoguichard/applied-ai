@@ -52,11 +52,14 @@ const w = WorkerController.init({
   events: Events
 })
 
-// Load the default users and product catalog, then immediately start training.
-// This gives the model a head start so recommendations are ready faster.
-const users = await userService.getDefaultUsers()
-const products = await productService.getProducts()
-w.triggerTrain(users, products)
+// Try to restore a previously trained model from the backend.
+// If none exists (first run or after a reseed), fall back to training from scratch.
+const hasSavedModel = await w.tryLoadSavedModel()
+if (!hasSavedModel) {
+  const users = await userService.getDefaultUsers()
+  const products = await productService.getProducts()
+  w.triggerTrain(users, products)
+}
 
 // ModelController manages the "Train Model" / "Run Recommendation" buttons
 ModelController.init({

@@ -100,6 +100,15 @@ export class WorkerController {
     })
   }
 
+  // Checks if a saved model exists on the backend; if so, tells the worker to load it.
+  // Returns true if a saved model was found, false otherwise.
+  async tryLoadSavedModel() {
+    const res = await fetch('/api/model/context')
+    if (!res.ok) return false
+    this.#worker.postMessage({ action: workerEvents.loadSavedModel })
+    return true
+  }
+
   // Sends a recommendation request to the worker thread
   triggerRecommend(user) {
     this.#worker.postMessage({ action: workerEvents.recommend, user })
