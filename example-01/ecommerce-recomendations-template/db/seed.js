@@ -15,7 +15,7 @@ async function seed() {
   try {
     await client.query('BEGIN')
 
-    await client.query('TRUNCATE purchases, users, products RESTART IDENTITY CASCADE')
+    await client.query('TRUNCATE model_snapshots, purchases, users, products RESTART IDENTITY CASCADE')
 
     for (const product of products) {
       await client.query(

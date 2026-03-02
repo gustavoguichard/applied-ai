@@ -17,3 +17,9 @@ CREATE TABLE IF NOT EXISTS purchases (
   product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, product_id)
 );
+
+CREATE TABLE IF NOT EXISTS model_snapshots (
+  id         INTEGER PRIMARY KEY DEFAULT 1,
+  context    JSONB        NOT NULL,
+  trained_at TIMESTAMPTZ  DEFAULT NOW()
+);
