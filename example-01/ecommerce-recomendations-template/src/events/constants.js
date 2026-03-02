@@ -22,6 +22,12 @@ export const events = {
   recommend: 'recommend'
 }
 
+export const trainingStatus = {
+  idle: 'idle',
+  training: 'training',
+  trained: 'trained'
+}
+
 // Worker-thread event names (postMessage protocol)
 export const workerEvents = {
   trainingComplete: 'training:complete',

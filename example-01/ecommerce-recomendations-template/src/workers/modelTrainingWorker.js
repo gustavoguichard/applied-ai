@@ -9,7 +9,7 @@
  * Message protocol (matches workerEvents in constants.js):
  *   Inbound:  { action: 'train:model', users: [...], products: [...] }
  *   Inbound:  { action: 'recommend', user: {...} }
- *   Outbound: { type: 'progress:update', progress: { progress: 50 } }
+ *   Outbound: { type: 'progress:update', progress: { status: 'training' | 'trained' } }
  *   Outbound: { type: 'training:log', epoch, loss, accuracy }
  *   Outbound: { type: 'training:complete' }
  *   Outbound: { type: 'recommend', user, recommendations: [...] }
@@ -47,7 +47,7 @@
 // TensorFlow.js is loaded from CDN — exposes the global `tf` namespace.
 // Must be imported before any tf.* calls.
 import 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js'
-import { workerEvents } from '../events/constants.js'
+import { workerEvents, trainingStatus } from '../events/constants.js'
 
 console.log('Model training worker initialized')
 
@@ -528,7 +528,7 @@ async function trainModel({ users, products }) {
   console.log('Training model with users:', users)
 
   // Notify the main thread that training initialization is halfway done
-  postMessage({ type: workerEvents.progressUpdate, progress: { progress: 50 } })
+  postMessage({ type: workerEvents.progressUpdate, progress: { status: trainingStatus.training } })
 
   // Build ML context — includes feature encodings, lookup indices, normalization bounds, etc.
   const context = makeContext({ users, products })
@@ -548,7 +548,7 @@ async function trainModel({ users, products }) {
   // Notify UI/main thread that training reached 100% completion
   postMessage({
     type: workerEvents.progressUpdate,
-    progress: { progress: 100 }
+    progress: { status: trainingStatus.trained }
   })
   // Signal end of training; main thread may now use the model for inference
   postMessage({ type: workerEvents.trainingComplete })

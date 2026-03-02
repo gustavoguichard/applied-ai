@@ -11,6 +11,7 @@
  * when BOTH conditions are met: a model has been trained AND a user is selected.
  */
 import { View } from './View.js'
+import { trainingStatus } from '../events/constants.js'
 
 export class ModelView extends View {
   #trainModelBtn = document.querySelector('#trainModelBtn')
@@ -71,7 +72,7 @@ export class ModelView extends View {
     this.#trainModelBtn.innerHTML =
       '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Training...'
 
-    if (progress.progress === 100) {
+    if (progress.status === trainingStatus.trained) {
       this.#trainModelBtn.disabled = false
       this.#trainModelBtn.innerHTML = 'Train Recommendation Model'
     }
