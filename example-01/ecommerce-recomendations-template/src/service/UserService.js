@@ -1,61 +1,50 @@
 /**
  * UserService — data access layer for user data.
  *
- * Uses sessionStorage as a lightweight, ephemeral database:
- * - On first call to getDefaultUsers(), fetches users.json and seeds sessionStorage
- * - All subsequent reads/writes operate on sessionStorage (no server round-trips)
- * - Data is lost when the browser tab is closed (by design — it's a demo app)
+ * Fetches user data from the REST API backed by PostgreSQL.
+ * Purchases are tracked in a dedicated `purchases` table and
+ * returned as an array of product IDs on each user object.
  *
- * Methods are async to match the interface of a real API service,
- * making it easy to swap sessionStorage for a backend later.
+ * Methods are async to match a real API service interface.
  */
 export class UserService {
-  #storageKey = 'ew-academy-users'
-
-  // Fetches the initial user data from the static JSON file
-  // and seeds sessionStorage. This is the "database reset" — called on app startup.
+  // Alias for getUsers() — kept for interface compatibility with existing callers.
+  // The DB is already seeded, so there is no separate "default" state to load.
   async getDefaultUsers() {
-    const response = await fetch('./data/users.json')
-    const users = await response.json()
-    this.#setStorage(users)
-
-    return users
+    return this.getUsers()
   }
 
   async getUsers() {
-    const users = this.#getStorage()
-    return users
+    const response = await fetch('/api/users')
+    return response.json()
   }
 
   async getUserById(userId) {
-    const users = this.#getStorage()
-    return users.find((user) => user.id === userId)
+    const response = await fetch(`/api/users/${userId}`)
+    return response.json()
   }
 
-  // Merges updated fields into the existing user object and persists to sessionStorage
-  async updateUser(user) {
-    const users = this.#getStorage()
-    const userIndex = users.findIndex((u) => u.id === user.id)
-
-    users[userIndex] = { ...users[userIndex], ...user }
-    this.#setStorage(users)
-
-    return users[userIndex]
-  }
-
-  // Prepends a new user to the list (used for the "non-trained" test user)
+  // Creates a new user. Uses an upsert on the server so re-loading the page
+  // with a hardcoded user (e.g. the non-trained test user) is idempotent.
   async addUser(user) {
-    const users = this.#getStorage()
-    this.#setStorage([user, ...users])
+    await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user),
+    })
   }
 
-  // Private helpers — sessionStorage get/set with JSON serialization
-  #getStorage() {
-    const data = sessionStorage.getItem(this.#storageKey)
-    return data ? JSON.parse(data) : []
+  // Inserts a row into the `purchases` table. Idempotent — duplicate buys are ignored.
+  async addPurchase(userId, productId) {
+    await fetch('/api/purchases', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, product_id: productId }),
+    })
   }
 
-  #setStorage(data) {
-    sessionStorage.setItem(this.#storageKey, JSON.stringify(data))
+  // Removes a row from the `purchases` table.
+  async removePurchase(userId, productId) {
+    await fetch(`/api/purchases/${userId}/${productId}`, { method: 'DELETE' })
   }
 }
