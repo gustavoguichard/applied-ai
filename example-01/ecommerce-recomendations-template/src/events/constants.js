@@ -32,6 +32,7 @@ export const trainingStatus = {
 export const workerEvents = {
   trainingComplete: 'training:complete',
   trainModel: 'train:model',
+  loadSavedModel: 'load:saved:model',
   recommend: 'recommend',
   trainingLog: 'training:log',
   progressUpdate: 'progress:update',

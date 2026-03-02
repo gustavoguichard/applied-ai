@@ -524,6 +524,94 @@ function preEncodeProducts(products, context) {
   }))
 }
 
+// --------------------------------------------------------------------------
+// PERSISTENCE HELPERS — serializeContext / arrayBufferToBase64
+// --------------------------------------------------------------------------
+
+// Extracts only the fields from _globalCtx needed for inference and converts
+// Float32Array product vectors to plain arrays so the object can be
+// JSON-serialised and stored in the backend.
+// `users` is intentionally excluded — only needed during training, not inference.
+function serializeContext(ctx) {
+  return {
+    categoriesIndex: ctx.categoriesIndex,
+    colorsIndex: ctx.colorsIndex,
+    minAge: ctx.minAge,
+    maxAge: ctx.maxAge,
+    minPrice: ctx.minPrice,
+    maxPrice: ctx.maxPrice,
+    numCategories: ctx.numCategories,
+    numColors: ctx.numColors,
+    dimentions: ctx.dimentions,
+    normalizedProductAvgAge: ctx.normalizedProductAvgAge,
+    // products is needed by encodeUserFromPurchases() at inference time to
+    // look up full product objects by ID from the user's purchase history.
+    products: ctx.products,
+    // Float32Array (from dataSync()) is not JSON-serialisable as an array;
+    // Array.from() produces a plain numeric array that survives JSON round-trips.
+    productVectors: ctx.productVectors.map((pv) => ({
+      name: pv.name,
+      meta: pv.meta,
+      vector: Array.from(pv.vector)
+    }))
+  }
+}
+
+// Converts an ArrayBuffer to a base64 string for embedding in a JSON payload.
+// Used to ship the model weight binary over a regular POST without multipart.
+// btoa() is available in Web Workers (part of the WindowOrWorkerGlobalScope).
+function arrayBufferToBase64(buffer) {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
+
+// --------------------------------------------------------------------------
+// PERSISTENCE — saveModelToBackend / loadSavedModel
+// --------------------------------------------------------------------------
+
+// Persists the trained model and inference context to the backend so they
+// survive page refreshes without requiring a full re-train.
+//
+// Two separate requests:
+//   1. POST /api/model — uses tf.io.withSaveHandler to intercept the model
+//      artifacts (topology + weight specs + binary weights) and send them as
+//      a single JSON payload with base64-encoded weights, avoiding multipart.
+//      The server saves model.json and model.weights.bin to disk in the format
+//      that tf.loadLayersModel expects when fetching via HTTP.
+//   2. POST /api/model/context — sends the serialised _globalCtx JSON, which
+//      the server stores as JSONB in the model_snapshots table in Postgres.
+async function saveModelToBackend() {
+  await _model.save(
+    tf.io.withSaveHandler(async (artifacts) => {
+      await fetch(`${self.location.origin}/api/model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modelTopology: artifacts.modelTopology,
+          // weightSpecs describes each tensor (name, shape, dtype); the server
+          // uses this to build the weightsManifest section of model.json.
+          weightSpecs: artifacts.weightSpecs,
+          // Binary weights encoded as base64 for JSON transport; the server
+          // decodes this back to a Buffer before writing to disk.
+          weightData: arrayBufferToBase64(artifacts.weightData)
+        })
+      })
+      // Required return value for tf.io.withSaveHandler — signals save success.
+      return { modelArtifactsInfo: { dateSaved: new Date(), modelTopologyType: 'JSON' } }
+    })
+  )
+
+  await fetch(`${self.location.origin}/api/model/context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(serializeContext(_globalCtx))
+  })
+}
+
 async function trainModel({ users, products }) {
   console.log('Training model with users:', users)
 
@@ -545,6 +633,9 @@ async function trainModel({ users, products }) {
   // Train a fresh neural network using the training data and await until complete
   _model = await configureNeuralNetAndTrain(trainingData)
 
+  // Persist the trained model and context to the backend for future sessions
+  await saveModelToBackend()
+
   // Notify UI/main thread that training reached 100% completion
   postMessage({
     type: workerEvents.progressUpdate,
@@ -552,6 +643,36 @@ async function trainModel({ users, products }) {
   })
   // Signal end of training; main thread may now use the model for inference
   postMessage({ type: workerEvents.trainingComplete })
+}
+
+// Restores a previously saved model and its inference context from the backend.
+// Triggered by the main thread on page load (via WorkerController.tryLoadSavedModel)
+// when a saved snapshot is detected, skipping the full training cycle.
+//
+// Runs both fetches in parallel for speed:
+//   - GET /api/model/context   → restores _globalCtx (normalization bounds,
+//     lookup indices, pre-encoded product vectors)
+//   - tf.loadLayersModel(...)  → fetches model.json then model.weights.bin,
+//     reassembles the tf.Sequential model with its trained weights
+//
+// Fires the same progress + trainingComplete events as trainModel() so the
+// rest of the app (WorkerController, ModelController) behaves identically
+// regardless of whether the model was trained fresh or loaded from storage.
+async function loadSavedModel() {
+  try {
+    const [context, loadedModel] = await Promise.all([
+      fetch(`${self.location.origin}/api/model/context`).then((r) => r.json()),
+      tf.loadLayersModel(`${self.location.origin}/api/model/model.json`)
+    ])
+
+    _globalCtx = context
+    _model = loadedModel
+
+    postMessage({ type: workerEvents.progressUpdate, progress: { status: trainingStatus.trained } })
+    postMessage({ type: workerEvents.trainingComplete })
+  } catch (e) {
+    console.error('Failed to load saved model:', e)
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -613,6 +734,7 @@ function recommend(user, ctx) {
 // it looks up 'train:model' in this map and calls trainModel(data).
 const handlers = {
   [workerEvents.trainModel]: trainModel,
+  [workerEvents.loadSavedModel]: loadSavedModel,
   [workerEvents.recommend]: (d) => recommend(d.user, _globalCtx)
 }
 
