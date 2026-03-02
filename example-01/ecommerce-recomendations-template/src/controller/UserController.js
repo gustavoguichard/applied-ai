@@ -79,6 +79,7 @@ export class UserController {
     this.#events.dispatchUsersUpdated({
       users: await this.#userService.getUsers()
     })
+    this.#events.dispatchRecommend(updatedUser)
   }
 
   // A past purchase was clicked for removal → remove its ID from the array,
@@ -93,6 +94,7 @@ export class UserController {
 
       const updatedUsers = await this.#userService.getUsers()
       this.#events.dispatchUsersUpdated({ users: updatedUsers })
+      this.#events.dispatchRecommend(user)
     }
   }
 
